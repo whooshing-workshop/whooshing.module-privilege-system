@@ -358,7 +358,7 @@
       "location" : "https://github.com/whooshing-workshop/whooshing.driver-privilege-system.git",
       "state" : {
         "branch" : "develop",
-        "revision" : "ce323524ba88354df23b1f179fa49457155e6a59"
+        "revision" : "c35705231d6f3e0c99d425a9c3a7429ab48b39ae"
       }
     },
     {
@@ -367,7 +367,7 @@
       "location" : "https://github.com/whooshing-workshop/whooshing.nexus",
       "state" : {
         "branch" : "develop",
-        "revision" : "c643a02b32921dbd3cb922d3dda145abe7b73fa8"
+        "revision" : "7f4add3afa5d07f1e9b96312e9a92dea311bfc43"
       }
     },
     {
@@ -412,7 +412,7 @@
       "location" : "https://github.com/whooshing-workshop/whooshing.toolbox-privilege-system",
       "state" : {
         "branch" : "develop",
-        "revision" : "f8950fa2786d153365a09455ebfebc9f90a3d99a"
+        "revision" : "ea98cb9ebfaced3fab7fc734c57a36ce179fdc40"
       }
     },
     {
@@ -421,7 +421,7 @@
       "location" : "https://github.com/whooshing-workshop/whooshing.tube-vapor",
       "state" : {
         "branch" : "develop",
-        "revision" : "465c71972762f3b27a54a27e98884ff90cc8b5e0"
+        "revision" : "3c0a80ed599eb726847e799a570fad7e81aa0ee3"
       }
     }
   ],
