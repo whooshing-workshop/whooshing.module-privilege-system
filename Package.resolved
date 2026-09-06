@@ -1,5 +1,5 @@
 {
-  "originHash" : "03cb9d7aabade4677df64fcf06979016fa68d4cf8e14ac6d51c606c632af757d",
+  "originHash" : "3d3356c83b5d585086ab6ca3b55f5ee3b13e5aa9e0f42b01ee8bfa9a3a79db46",
   "pins" : [
     {
       "identity" : "anycodable",
@@ -348,8 +348,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/whooshing-workshop/whooshing.driver-file-storage.git",
       "state" : {
-        "revision" : "d047301c5d13cfa6422c9a6073d378b2712d1d18",
-        "version" : "1.1.2"
+        "revision" : "31342b6018aaf2966b098ec41bd4e4f976ca7a59",
+        "version" : "1.1.3"
       }
     },
     {
@@ -366,8 +366,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/whooshing-workshop/whooshing.nexus",
       "state" : {
-        "branch" : "develop",
-        "revision" : "7f4add3afa5d07f1e9b96312e9a92dea311bfc43"
+        "revision" : "7f4add3afa5d07f1e9b96312e9a92dea311bfc43",
+        "version" : "1.0.0"
       }
     },
     {
@@ -420,8 +420,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/whooshing-workshop/whooshing.tube-vapor",
       "state" : {
-        "branch" : "develop",
-        "revision" : "3c0a80ed599eb726847e799a570fad7e81aa0ee3"
+        "revision" : "fa54bf3ab5dcc6eb85a4bf35a61d9b3b705d1a4b",
+        "version" : "1.0.0"
       }
     }
   ],
