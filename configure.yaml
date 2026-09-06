@@ -1,5 +1,5 @@
 --- # 该模块的名称，在服务模块创建时将使用该名称
-whooshing.template-privilege-system:
+whooshing.module-privilege-system:
     # 该模块的根域名 (二级域名)
     # 若设置为 template，则访问域名将为 "template.whooshings.space"
     domain: "template"

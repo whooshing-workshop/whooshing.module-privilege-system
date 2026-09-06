@@ -1,1 +1,1 @@
-# whooshing.template-privilege-system
+# whooshing.module-privilege-system

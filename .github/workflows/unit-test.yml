@@ -12,7 +12,7 @@ jobs:
   unit-tests:
     uses: whooshing-workshop/ci/.github/workflows/run-unit-tests.yml@develop
     with:
-      ios_scheme_name: whooshing.template-privilege-system
+      ios_scheme_name: whooshing.module-privilege-system
       work_dir: "."
 
       with_release_mode_testing: true

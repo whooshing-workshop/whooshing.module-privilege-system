@@ -2,7 +2,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "whooshing.template-privilege-system",
+    name: "whooshing.module-privilege-system",
     platforms: [
         .macOS(.v13),
         .iOS(.v16),
