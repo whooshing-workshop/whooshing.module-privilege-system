@@ -2,16 +2,31 @@ import PrivilegeSystemDriver
 import VaporTube
 import Foundation
 
+/// 只读查询控制器。
+///
+/// 【修复 FINDINGS #3】原挂载于根路径 `/data`（匿名可读）；现挂载于 admin 保护链下，前缀为 `/api/data`，
+/// 需要 `X-Role-Id`(admin) / `X-Credential` / `X-Encrypted-Token` 三个请求头。
+///
+/// 查询参数均为可选过滤条件，全部省略时返回全表；参数值不是合法 UUID 时该条件被忽略（Vapor `req.query[UUID.self]` 返回 nil）。
+/// 所有响应中的关系字段（`users` / `roles` / `policies` …）均为未加载状态 `{ "loaded": false, "value": null }`。
 public struct DataController: RouteCollection, Sendable {
     /// 查询 API 设计：
     ///
     ///     查询模型记录:
-    ///         所有: http://URL/MODEL_NAME
-    ///         条件: http://URL/MODEL_NAME?id=XXX
+    ///         所有: http://URL/api/data/MODEL_NAME
+    ///         条件: http://URL/api/data/MODEL_NAME?id=XXX
     ///     查询模型关系:
-    ///         所有: http://URL/relation/RELATION_NAME
-    ///         条件: http://URL/relation/RELATION_NAME?LEFT_ID=XXX
-    ///         条件: http://URL/relation/RELATION_NAME?RIGHT_ID=XXX
+    ///         所有: http://URL/api/data/relation/RELATION_NAME
+    ///         条件: http://URL/api/data/relation/RELATION_NAME?LEFT_ID=XXX
+    ///         条件: http://URL/api/data/relation/RELATION_NAME?RIGHT_ID=XXX
+    ///
+    /// 关系记录的编码统一为 `{ id, primary_id, secondary_id, create_at }`：
+    ///     domain_user:        primary = user,   secondary = domain
+    ///     domain_group:       primary = domain, secondary = group
+    ///     user_group:         primary = user,   secondary = group（另含 roles 关系字段：组内角色）
+    ///     user_role:          primary = user,   secondary = role
+    ///     role_group:         primary = role,   secondary = group
+    ///     role_user_in_group: primary = role,   secondary = user_in_group（即 user_group 关系记录的 id）
     ///
     /// 模型记录:
     ///     - GET /domain                      ?id

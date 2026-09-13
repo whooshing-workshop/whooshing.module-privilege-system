@@ -2,6 +2,25 @@ import PrivilegeSystemDriver
 import VaporTube
 import Foundation
 
+/// 角色控制器：角色的增删改、任命（用户 / 群组 / 组内）与任命关系判定。
+///
+/// 路由（均位于 admin 保护链 `/api` 下）：
+///
+///     PUT    /role                          body: [PRole]                                    → [QRole]
+///     PUT    /role/with_policies            body: [ { left: [PPolicy], right: PRole } ]      → true
+///     PUT    /role/with_policies/returning  同上                                              → { roleId: [QPolicy] }
+///     DELETE /role                          body: [UUID]                                     → true（级联删除策略与任命关系）
+///     POST   /role/:roleId/name             body: String                                     → QRole
+///     POST   /role/:roleId/summary          body: String?                                    → QRole
+///     POST   /role/appoint/user             body: [ { left: [roleId], right: [userId] } ]    → true
+///     POST   /role/appoint/group            body: [ { left: [roleId], right: [groupId] } ]   → true
+///     POST   /role/appoint/user_in_group    body: [ { left: [roleId], right: [userInGroupId] } ] → true
+///     POST   /role/dismiss/{user|group|user_in_group}  同上                                  → true
+///     GET    /role/is/appointed?role_id&user_id        任意方式任命                            → Bool
+///     GET    /role/is/user_role?role_id&user_id        直接任命                                → Bool
+///     GET    /role/is/group_role?role_id&group_id      群组任命                                → Bool
+///     GET    /role/verify/group_role?role_id&user_id           用户经哪些群组获得该群组角色     → [QGroup]
+///     GET    /role/verify/user_in_group_role?role_id&user_id   用户在哪些群组被任命该组内角色   → [QGroup]
 public struct RoleController: RouteCollection, Sendable {
     static let role = PrivilegeSystem.main.role
 

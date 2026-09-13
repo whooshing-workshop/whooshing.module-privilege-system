@@ -2,6 +2,22 @@ import PrivilegeSystemDriver
 import VaporTube
 import Foundation
 
+/// 群组控制器：群组层级的增删改、成员管理与组内关系查询。
+///
+/// 群组是树形结构（`parent_id`）。用户加入子群组后，会“继承”所有祖先群组被任命的**群组角色**
+/// 与被指派的**域**（域策略中 `input.group` 为持有该域的祖先群组）；**组内角色**则只作用于被任命的那条 user_in_group 关系。
+///
+/// 路由（均位于 admin 保护链 `/api` 下）：
+///
+///     PUT    /group                    body: [PGroup { name, parent_id?, summary? }]        → [QGroup]
+///     DELETE /group                    body: [UUID]                                        → true
+///     POST   /group/:groupId/name      body: String                                        → QGroup
+///     POST   /group/:groupId/summary   body: String?                                       → QGroup
+///     POST   /group/join/user          body: [ { left: [userId], right: [groupId] } ]      → true
+///     POST   /group/kick/user          body: [ { left: [userId], right: [groupId] } ]      → true
+///     POST   /group/move               body: { left: groupId, right: newParentId | null }  → true（不可移入自身或子树：403）
+///     POST   /group/query?strict=true  body: [ { primary_id: userId, secondary_id: groupId } ] → [UserTGroup]
+///                                      strict 时查到的数量与请求不符 → 422
 public struct GroupController: RouteCollection, Sendable {
     static let group = PrivilegeSystem.main.group
 

@@ -122,7 +122,9 @@
 ├── Sources/App
 │   ├── entrypoint.swift                 // 项目入口、运行模式识别与调试参数
 │   ├── configure.swift                  // 命令注册、路由注册
-│   ├── routes.swift                     // 路由分组（公开 / data / inline / api）
+│   ├── routes.swift                     // 路由分组（公开 / inline / api / api/data）
+│   ├── Middlewares
+│   │   └── RoleAppointmentGuard.swift   // /api 保护链追加：角色必须任命给当前用户
 │   ├── Drivers
 │   │   ├── DriverInit.swift             // 驱动预热
 │   │   ├── FileStorage.swift            // 文件加密存储单例
@@ -133,6 +135,7 @@
 │       ├── DataController.swift         // 只读查询接口
 │       ├── PrivilegeController.swift    // 管理接口总控制器
 │       ├── Privilege/                   // 域、群组、角色、策略、用户资料、资料切片控制器
+│           └── PolicyGuards.swift       // 策略一致性守卫（同一模块仅一条策略、删除校验、OPA 错误映射）
 │       └── Commands/CreateAdmin.swift   // create-admin 命令
 └── Tests/AppTests                       // 测试代码
 ```
@@ -146,34 +149,34 @@
 ```swift
 AccountController 提供:
     - POST /account/register          注册账号，Body 为 PUser（email + hashedPassword），返回 QUser
-    - POST /account/login             登录，Body 为 PUser，返回 QToken（凭据与 Token）
+    - POST /account/login             登录，Body 为 PUser，返回 { token: QToken, roles: [QRole] }（凭据与 Token + 该用户可用角色）
     - PUT  /account/change_password   凭旧密码修改密码，Body 为 { user: PUser, newPassword: String }
 ```
 
-#### 数据查询路由（`/data`）
+#### 数据查询路由（`/api/data`）
 
-由 `DataController` 提供，均为 `GET`，可通过 query 参数过滤：
+由 `DataController` 提供，均为 `GET`，可通过 query 参数过滤。位于管理路由的 admin 保护链下（请求头要求同 `/api`）：
 
 ```
 模型记录:
-    - GET /data/domain                       ?id
-    - GET /data/group                        ?id ?parent_id ?name
-    - GET /data/role                         ?id ?name
-    - GET /data/user                         ?id ?email
-    - GET /data/user_info                    ?id ?user_id
-    - GET /data/policy/domain                ?id ?parent_id ?module_id
-    - GET /data/policy/role                  ?id ?parent_id ?module_id
-    - GET /data/info_slice/address           ?id ?user_info_id
-    - GET /data/info_slice/phone             ?id ?user_info_id
-    - GET /data/info_slice/alternate_email   ?id ?user_info_id
+    - GET /api/data/domain                       ?id
+    - GET /api/data/group                        ?id ?parent_id ?name
+    - GET /api/data/role                         ?id ?name
+    - GET /api/data/user                         ?id ?email
+    - GET /api/data/user_info                    ?id ?user_id
+    - GET /api/data/policy/domain                ?id ?parent_id ?module_id
+    - GET /api/data/policy/role                  ?id ?parent_id ?module_id
+    - GET /api/data/info_slice/address           ?id ?user_info_id
+    - GET /api/data/info_slice/phone             ?id ?user_info_id
+    - GET /api/data/info_slice/alternate_email   ?id ?user_info_id
 
 模型关系:
-    - GET /data/relation/domain_user         ?domain_id ?user_id
-    - GET /data/relation/domain_group        ?domain_id ?group_id
-    - GET /data/relation/user_group          ?user_id   ?group_id
-    - GET /data/relation/user_role           ?user_id   ?role_id
-    - GET /data/relation/role_group          ?role_id   ?group_id
-    - GET /data/relation/role_user_in_group  ?role_id   ?user_in_group_id
+    - GET /api/data/relation/domain_user         ?domain_id ?user_id
+    - GET /api/data/relation/domain_group        ?domain_id ?group_id
+    - GET /api/data/relation/user_group          ?user_id   ?group_id
+    - GET /api/data/relation/user_role           ?user_id   ?role_id
+    - GET /api/data/relation/role_group          ?role_id   ?group_id
+    - GET /api/data/relation/role_user_in_group  ?role_id   ?user_in_group_id
 ```
 
 #### 服务间路由（`/inline`）
@@ -188,7 +191,7 @@ ArbitrateController 提供:
 
 #### 管理路由（`/api`）
 
-经 `apiProtectGrouped(for: .main, in: nexus)` 保护，需携带 `X-Credential`、`X-Encrypted-Token` 与 `X-Role-Id` 三个请求头，且所用角色必须为 `admin`：
+经 `apiProtectGrouped(for: .main, in: nexus).grouped(RoleAppointmentGuard())` 保护，需携带 `X-Credential`、`X-Encrypted-Token` 与 `X-Role-Id` 三个请求头，所用角色必须为 `admin`，**且该角色必须确实任命给了凭据所属的用户**（直接 / 群组 / 组内任命均可）：
 
 ```swift
 ApiAccountController 提供:
@@ -232,7 +235,11 @@ swift test
 
 - `/inline/authenticate` 与 `/api` 的身份验证依赖用户登录时获得的 `QToken`：`X-Credential` 为凭据原文，`X-Encrypted-Token` 为 Token 密钥**加密自身哈希**后的 base64 密文，而非 Token 原文。
 - `admin` 属于 `reservedRoleName`，只能通过 `create-admin` 命令创建；`nobody` 角色在启动时自动创建，独立调试模式下使用固定 ID（`Woo.nobodyRoleId`）以便测试。
-- `/data` 下的查询接口当前未设置身份验证，部署到公开网络前请按需为其增加保护。
+- 查询接口已移至 `/api/data`，与管理接口共用 admin 保护链；旧路径 `/data` 不再存在。
+- `/inline/authenticate` 会校验 `role_id` 是否任命给该用户（否则 403），并默认对响应脱敏（`token.token` 置空、`key` 为随机密钥），见 `Woo.exposeUserSecretsToModules`。
+- 同一角色 / 域在同一模块下只允许一条策略（重复 → 409）；删除策略时 `right` 必须与策略的 `parent_id` 一致（否则 422）；Rego 语法错误 → 422。原因见 `PolicyGuards` 的注释。
+- 一个用户只允许一份用户信息（重复 → 409）。
+- 保留名 `admin` 既不能用于创建角色，也不能通过改名获得（→ 422）。
 
 ------
 
