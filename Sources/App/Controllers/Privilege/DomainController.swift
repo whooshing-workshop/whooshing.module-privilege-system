@@ -21,15 +21,6 @@ import Foundation
 public struct DomainController: RouteCollection, Sendable {
     static let domain = PrivilegeSystem.main.domain
 
-    /// 【修复 FINDINGS #6】“连带策略创建”时，同一个域在同一模块下只允许一条策略（批内校验）
-    static func precheck(_ relations: OrderedSet<MTORelation<PPolicy<Domain>, PDomain>>) throws {
-        var pairs: [(moduleId: UUID, parentKey: String)] = []
-        for (i, r) in relations.enumerated() {
-            for p in r.left { pairs.append((p.moduleId, "#\(i)")) }
-        }
-        try PolicyGuards.ensureNoDuplicateInBatch(pairs, label: "域")
-    }
-
     public func boot(routes: any RoutesBuilder) throws {
         let domain = routes.grouped("domain")
         domain.put(use: create)
@@ -71,7 +62,6 @@ public extension DomainController {
     @Sendable
     func createWithPolicies(req: Request) async throws -> Bool {
         let relations = try req.content.decode(OrderedSet<MTORelation<PPolicy<Domain>, PDomain>>.self)
-        try Self.precheck(relations)
         // 【修复 FINDINGS #9】Rego 语法错误 → 422
         try await PolicyGuards.run { try await Self.domain.create(relations: relations) }
         return true
@@ -81,7 +71,6 @@ public extension DomainController {
     @Sendable
     func createWithPoliciesReturning(req: Request) async throws -> [String: [QPolicy<Domain>]] {
         let relations = try req.content.decode(OrderedSet<MTORelation<PPolicy<Domain>, PDomain>>.self)
-        try Self.precheck(relations)
         // 【修复 FINDINGS #9】Rego 语法错误 → 422
         let result = try await PolicyGuards.run { try await Self.domain.createWithReturning(relations: relations) }
         return .init(uniqueKeysWithValues: result.map { ($0.key.uuidString, $0.value) })

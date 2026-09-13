@@ -18,6 +18,11 @@ import Foundation
 ///
 /// `PPolicy = { module_id: UUID, policy: String }`，`policy` 为 Rego 规则本体
 /// （服务端自动包装 `package` / `import data.utils.pg` / `default allow := false`）。
+///
+/// 多策略语义：同一角色 / 域在同一模块下可以有多条策略，仲裁时逐条求值并按 **AND** 合并
+/// （任一策略拒绝即拒绝；零条策略视为拒绝）。每条策略在 OPA 中有独立路径（含 policy_id），可独立增删。
+///
+/// 错误约定（详见 `PolicyGuards`）：删除时 `right` 与策略 `parent_id` 不一致 → 422；Rego 语法错误 → 422。
 public struct PolicyController: RouteCollection, Sendable {
     static let policy = PrivilegeSystem.main.policy
 
@@ -37,21 +42,6 @@ public struct PolicyController: RouteCollection, Sendable {
         }
     }
 
-    /// 通用前置校验：批内不重复 + 数据库中不存在
-    static func precheck<T: PolicyType>(
-        _ type: T.Type,
-        relations: OrderedSet<MTORelation<PPolicy<T>, UUID>>,
-        label: String
-    ) async throws where T.Model.IDValue == UUID {
-        var pairs: [(moduleId: UUID, parentId: UUID)] = []
-        for r in relations {
-            for p in r.left {
-                pairs.append((p.moduleId, r.right))
-            }
-        }
-        try PolicyGuards.ensureNoDuplicateInBatch(pairs.map { (moduleId: $0.moduleId, parentKey: $0.parentId.uuidString) }, label: label)
-        try await PolicyGuards.ensureNotExists(T.self, pairs: pairs, label: label)
-    }
 }
 
 // MARK: - 域策略
@@ -61,7 +51,6 @@ public extension PolicyController {
     @Sendable
     func createDomainPolicies(req: Request) async throws -> Bool {
         let relations = try req.content.decode(OrderedSet<MTORelation<PPolicy<Domain>, UUID>>.self)
-        try await Self.precheck(Domain.self, relations: relations, label: "域")
         try await PolicyGuards.run {
             try await Self.policy.create(to: Domain.self, relations: relations)
         }
@@ -72,7 +61,6 @@ public extension PolicyController {
     @Sendable
     func createDomainPoliciesReturning(req: Request) async throws -> [String: [QPolicy<Domain>]] {
         let relations = try req.content.decode(OrderedSet<MTORelation<PPolicy<Domain>, UUID>>.self)
-        try await Self.precheck(Domain.self, relations: relations, label: "域")
         let result = try await PolicyGuards.run {
             try await Self.policy.createWithReturning(to: Domain.self, relations: relations)
         }
@@ -97,7 +85,6 @@ public extension PolicyController {
     @Sendable
     func createRolePolicies(req: Request) async throws -> Bool {
         let relations = try req.content.decode(OrderedSet<MTORelation<PPolicy<Role>, UUID>>.self)
-        try await Self.precheck(Role.self, relations: relations, label: "角色")
         try await PolicyGuards.run {
             try await Self.policy.create(to: Role.self, relations: relations)
         }
@@ -108,7 +95,6 @@ public extension PolicyController {
     @Sendable
     func createRolePoliciesReturning(req: Request) async throws -> [String: [QPolicy<Role>]] {
         let relations = try req.content.decode(OrderedSet<MTORelation<PPolicy<Role>, UUID>>.self)
-        try await Self.precheck(Role.self, relations: relations, label: "角色")
         let result = try await PolicyGuards.run {
             try await Self.policy.createWithReturning(to: Role.self, relations: relations)
         }

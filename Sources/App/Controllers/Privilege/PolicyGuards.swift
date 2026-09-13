@@ -2,52 +2,19 @@ import PrivilegeSystemDriver
 import VaporTube
 import Foundation
 
-/// 策略一致性守卫（【修复 FINDINGS #6 / #9】）
+/// 策略守卫（【修复 FINDINGS #6 / #9】）
 ///
-/// 背景：OPA 中策略的存放路径仅由 `(moduleId, 所属角色/域 ID)` 决定（`m_<module>/role/id_<role>`），
-/// 而数据库允许同一角色（或域）在同一模块下存在多条策略。这会导致：
-///   - 后写入的策略在 OPA 中**覆盖**先写入的策略，数据库却两条都在；
-///   - 删除其中任意一条时，OPA 路径被整体删除，数据库中残留的另一条从此不再生效（直到服务重启重新注入）；
-///   - `DELETE /api/policy/*` 若传入与策略实际父级不一致的 `right`，会删掉错误的 OPA 路径。
+/// 历史：旧版 toolbox-privilege-system 的 OPA 策略路径只由 `(module_id, 角色/域 ID)` 决定，同一角色在同一模块下的多条策略会在 OPA
+/// 中互相覆盖，因此 App 层曾在这里强制“同一 (module, parent) 只允许一条策略”（`ensureNotExists` → 409）。
 ///
-/// 权限主系统在库层面无法改变这一行为，因此在 App 层强制约束：
-///   **同一 (module, parent) 只允许一条策略**；创建时重复 → 409；删除时 `right` 必须等于策略的 `parent_id` → 422。
-/// 需要替换策略时，先删除再创建（或使用 `replace` 语义的接口）。
+/// 自 toolbox-privilege-system V1.1.1.2 起，OPA 路径已带上 `policy_id`（`m_<module>.role.v_<role>.p_<policy>`），
+/// 同一角色 / 域在同一模块下可以有多条策略，仲裁时逐条求值并按 **AND** 合并（任一策略拒绝即拒绝；零条策略视为拒绝）。
+///
+///   1. 删除策略时，请求中的所属 ID（`right`）必须与策略记录的 `parent_id` 一致，否则拒绝（422），
+///      避免按错误的 (module, parent, policy) 组合去删 OPA 路径；
+///   2. OPA 拒绝策略（最常见是 Rego 语法错误）时，把库层的内部错误映射为 422，
+///      让客户端能区分“策略写错了”与“服务故障”。
 enum PolicyGuards {
-    /// 一批待创建的策略在“批内”不得出现同一 parent 在同一 module 下的多条策略
-    ///
-    /// - Parameter pairs: 每条策略的 (moduleId, parentKey)。parentKey 对于“连带创建”的场景可用批内序号代替。
-    static func ensureNoDuplicateInBatch(_ pairs: [(moduleId: UUID, parentKey: String)], label: String) throws {
-        var seen = Set<String>()
-        for p in pairs {
-            let key = "\(p.moduleId.uuidString)|\(p.parentKey)"
-            guard seen.insert(key).inserted else {
-                throw Abort(.conflict, reason: "同一\(label)在同一模块(\(p.moduleId))下只允许一条策略，请求中出现了重复")
-            }
-        }
-    }
-
-    /// 数据库中不得已存在同一 (module, parent) 的策略
-    static func ensureNotExists<T: PolicyType>(
-        _ type: T.Type,
-        pairs: [(moduleId: UUID, parentId: UUID)],
-        label: String
-    ) async throws where T.Model.IDValue == UUID {
-        let origin = PrivilegeSystem.main.origin
-        for p in pairs {
-            let existing = try await QPolicy<T>.query(on: origin)
-                .filter(\.$parent.id == p.parentId)
-                .filter(\.moduleId == p.moduleId)
-                .all()
-            guard existing.isEmpty else {
-                throw Abort(
-                    .conflict,
-                    reason: "\(label) \(p.parentId) 在模块 \(p.moduleId) 下已存在策略 \(existing.map { $0.id.uuidString }.joined(separator: ","))；请先删除旧策略再创建（同一模块下只允许一条）"
-                )
-            }
-        }
-    }
-
     /// 删除策略时，请求中的所属 ID 必须与策略记录的 parent_id 一致
     static func ensureParentMatches<T: PolicyType>(_ policy: QPolicy<T>, parentId: UUID, label: String) throws where T.Model.IDValue == UUID {
         guard policy.$parent.id == parentId else {

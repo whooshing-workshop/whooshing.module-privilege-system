@@ -80,7 +80,7 @@ public extension RoleController {
     @Sendable
     func createWithPolicies(req: Request) async throws -> Bool {
         let relations = try req.content.decode(OrderedSet<MTORelation<PPolicy<Role>, PRole>>.self)
-        try await Self.role.create(relations: relations)
+        try await PolicyGuards.run { try await Self.role.create(relations: relations) }
         return true
     }
 
@@ -88,7 +88,7 @@ public extension RoleController {
     @Sendable
     func createWithPoliciesReturning(req: Request) async throws -> [String: [QPolicy<Role>]] {
         let relations = try req.content.decode(OrderedSet<MTORelation<PPolicy<Role>, PRole>>.self)
-        let result = try await Self.role.createWithReturning(relations: relations)
+        let result = try await PolicyGuards.run { try await Self.role.createWithReturning(relations: relations) }
         return .init(uniqueKeysWithValues: result.map { ($0.key.uuidString, $0.value) })
     }
 }
