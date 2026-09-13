@@ -22,10 +22,7 @@ let package = Package(
         // 📁 Whooshing 文件加密系统模块驱动
         .package(url: "https://github.com/whooshing-workshop/whooshing.driver-file-storage.git", from: "1.1.3"),
         // 🪩 Whooshing 权限系统模块驱动
-        .package(url: "https://github.com/whooshing-workshop/whooshing.driver-privilege-system.git", branch: "develop"),
-//        .package(path: "/Users/clwang/GitHub/whooshing.driver-privilege-system"),
-        
-        .package(path: "/Users/clwang/GitHub/whooshing.toolbox-privilege-system")
+        .package(url: "https://github.com/whooshing-workshop/whooshing.driver-privilege-system.git", from: "1.0.9")
     ],
     targets: [
         .executableTarget(

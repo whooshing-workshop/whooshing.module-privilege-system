@@ -1,5 +1,5 @@
 {
-  "originHash" : "9be5eab38e2a044ec34136cbfd95fc06799c124c31095c3169b9754559d41dd2",
+  "originHash" : "cb30b1d6c05825b749865607931e495a0cb417173c1cd4fe6893f4f65516a5c1",
   "pins" : [
     {
       "identity" : "anycodable",
@@ -357,8 +357,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/whooshing-workshop/whooshing.driver-privilege-system.git",
       "state" : {
-        "branch" : "develop",
-        "revision" : "cab9813d955be74cdfc420783fde8ad274fd84de"
+        "revision" : "22335e2a15c6ca532955528f99b82612142fa301",
+        "version" : "1.0.9"
       }
     },
     {
@@ -404,6 +404,15 @@
       "state" : {
         "revision" : "603f7f21a503447978704ffc6dd565b776596454",
         "version" : "1.1.3"
+      }
+    },
+    {
+      "identity" : "whooshing.toolbox-privilege-system",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/whooshing-workshop/whooshing.toolbox-privilege-system",
+      "state" : {
+        "revision" : "62f67c3622b1743069119a8233a75c6e43317e2f",
+        "version" : "1.1.2"
       }
     },
     {
