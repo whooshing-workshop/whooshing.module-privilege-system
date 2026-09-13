@@ -124,7 +124,7 @@
 │   ├── configure.swift                  // 命令注册、路由注册
 │   ├── routes.swift                     // 路由分组（公开 / inline / api / api/data）
 │   ├── Middlewares
-│   │   └── RoleAppointmentGuard.swift   // /api 保护链追加：角色必须任命给当前用户
+│   │   └── RoleAppointmentGuard.swift   // 历史文件：任命关系校验已内置于 driver 的 apiProtectGrouped，此处不再挂载
 │   ├── Drivers
 │   │   ├── DriverInit.swift             // 驱动预热
 │   │   ├── FileStorage.swift            // 文件加密存储单例
@@ -135,7 +135,7 @@
 │       ├── DataController.swift         // 只读查询接口
 │       ├── PrivilegeController.swift    // 管理接口总控制器
 │       ├── Privilege/                   // 域、群组、角色、策略、用户资料、资料切片控制器
-│           └── PolicyGuards.swift       // 策略一致性守卫（同一模块仅一条策略、删除校验、OPA 错误映射）
+│           └── PolicyGuards.swift       // 策略守卫（删除时 parent 一致性校验、OPA / Rego 错误 → 422）
 │       └── Commands/CreateAdmin.swift   // create-admin 命令
 └── Tests/AppTests                       // 测试代码
 ```
@@ -191,11 +191,13 @@ ArbitrateController 提供:
 
 #### 管理路由（`/api`）
 
-经 `apiProtectGrouped(for: .main, in: nexus).grouped(RoleAppointmentGuard())` 保护，需携带 `X-Credential`、`X-Encrypted-Token` 与 `X-Role-Id` 三个请求头，所用角色必须为 `admin`，**且该角色必须确实任命给了凭据所属的用户**（直接 / 群组 / 组内任命均可）：
+经 driver 的 `apiProtectGrouped(for: .main, in: nexus)` 保护，保护链为 `RoleAuthenticator → AdminAuthGuard → ApiValidator(.local) → RoleAppointmentGuard`：需携带 `X-Credential`、`X-Encrypted-Token` 与 `X-Role-Id` 三个请求头，所用角色必须为 `admin`，**且该角色必须确实任命给了凭据所属的用户**（直接 / 群组 / 组内任命均可，否则拒绝）：
 
 ```swift
 ApiAccountController 提供:
-    - POST /api/account/change_password    以当前登录身份修改密码
+    - POST /api/account/change_password    以当前登录身份修改密码（Body 为新密码的 hashed_password JSON 字符串，返回 QUser）
+
+GET /api/test                              保护链自检，返回当前 AuthData（含用户与所用角色）
 
 PrivilegeController 汇总以下子控制器:
     - /api/domain        域的创建 / 删除 / 改名 / 改简介，用户与群组的指派与解除
@@ -236,10 +238,23 @@ swift test
 - `/inline/authenticate` 与 `/api` 的身份验证依赖用户登录时获得的 `QToken`：`X-Credential` 为凭据原文，`X-Encrypted-Token` 为 Token 密钥**加密自身哈希**后的 base64 密文，而非 Token 原文。
 - `admin` 属于 `reservedRoleName`，只能通过 `create-admin` 命令创建；`nobody` 角色在启动时自动创建，独立调试模式下使用固定 ID（`Woo.nobodyRoleId`）以便测试。
 - 查询接口已移至 `/api/data`，与管理接口共用 admin 保护链；旧路径 `/data` 不再存在。
-- `/inline/authenticate` 会校验 `role_id` 是否任命给该用户（否则 403），并默认对响应脱敏（`token.token` 置空、`key` 为随机密钥），见 `Woo.exposeUserSecretsToModules`。
-- 同一角色 / 域在同一模块下只允许一条策略（重复 → 409）；删除策略时 `right` 必须与策略的 `parent_id` 一致（否则 422）；Rego 语法错误 → 422。原因见 `PolicyGuards` 的注释。
+- `/inline/authenticate` 会校验 `role_id` 是否任命给该用户（否则 401 / 403）。响应 `AuthData` 目前仍包含 `token.token`（用户的对称密钥明文），业务模块不应把它透传给客户端以外的任何地方；脱敏方案见 [issue #2](https://github.com/whooshing-workshop/whooshing.module-privilege-system/issues/2)。
+- 同一角色 / 域在同一模块下**可以有多条策略**（toolbox ≥ V1.1.1.2，OPA 路径含 `policy_id`），仲裁时逐条求值并按 **AND** 合并；旧版 App 层“同一模块仅一条策略 → 409”的限制已移除。删除策略时 `right` 必须与策略的 `parent_id` 一致（否则 422）；Rego 语法错误 → 422（由 `PolicyGuards` 映射）。
+- 角色在某模块下**没有任何策略**时，对该模块的仲裁会以 422 “无效的角色，尚未为其设置任何权限”结束（toolbox ≥ V1.1.1.8），而不是返回 false；新建角色请至少为其配置一条策略。域在该模块下无策略则不参与仲裁。
 - 一个用户只允许一份用户信息（重复 → 409）。
-- 保留名 `admin` 既不能用于创建角色，也不能通过改名获得（→ 422）。
+- 保留名 `admin` 既不能用于创建角色，也不能通过改名获得（→ 4xx）。
+
+------
+
+### 集成测试与已知问题
+
+[whooshing.integration-tests](https://github.com/whooshing-workshop/whooshing.integration-tests) 提供针对本模块与业务模块模板的黑盒联调测试（236 个用例，覆盖身份认证保护链、服务间接口、各管理接口以及 角色 × 域 × 群组 × 资源 的仲裁矩阵），运行方式见其 README。
+
+测试发现但尚未处理的问题统一记录在本仓库的 [Issues](https://github.com/whooshing-workshop/whooshing.module-privilege-system/issues)（按 `security` / `error-mapping` / `design` / `upstream:*` 等标签分类），其中较常遇到的：
+
+- 修改 / 删除不存在的记录、重复任命等可预期失败目前返回 500 而非 4xx（`error-mapping`）；
+- `POST /api/group/query` 按 user × group 笛卡尔积查询而非逐对匹配，`strict=true` 可能误报 422；
+- 修改密码不会吊销已签发的 Token，且没有登出 / 删除用户接口。
 
 ------
 
